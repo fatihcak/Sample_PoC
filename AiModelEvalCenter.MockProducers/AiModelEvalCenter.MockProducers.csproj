@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-AiModelEvalCenter.MockProducers-63b294d6-caa1-4a0e-9a62-7902e73ebf20</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AiModelEvalCenter.Domain\AiModelEvalCenter.Domain.csproj" />
+    <ProjectReference Include="..\AiModelEvalCenter.Application\AiModelEvalCenter.Application.csproj" />
+  </ItemGroup>
+</Project>

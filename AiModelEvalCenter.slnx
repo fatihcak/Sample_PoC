@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="AiModelEvalCenter.Application/AiModelEvalCenter.Application.csproj" />
+  <Project Path="AiModelEvalCenter.Domain/AiModelEvalCenter.Domain.csproj" />
+  <Project Path="AiModelEvalCenter.Infrastructure/AiModelEvalCenter.Infrastructure.csproj" />
+  <Project Path="AiModelEvalCenter.MockProducers/AiModelEvalCenter.MockProducers.csproj" />
+  <Project Path="AiModelEvalCenter.WebApi/AiModelEvalCenter.WebApi.csproj" />
+</Solution>
