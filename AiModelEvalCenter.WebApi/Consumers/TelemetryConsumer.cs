@@ -1,5 +1,6 @@
 using AiModelEvalCenter.Domain.Entities;
 using AiModelEvalCenter.Domain.Interfaces;
+using AiModelEvalCenter.Domain.Messages;
 using AiModelEvalCenter.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,9 +38,8 @@ namespace AiModelEvalCenter.WebApi.Consumers
 
             await _channel.ExchangeDeclareAsync("telemetry.exchange", ExchangeType.Topic, cancellationToken: cancellationToken);
             await _channel.QueueDeclareAsync("q.telemetry.ingest", durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
-            
             await _channel.QueueBindAsync("q.telemetry.ingest", "telemetry.exchange", "telemetry.#", cancellationToken: cancellationToken);
-            await _channel.BasicQosAsync(0, 5, false, cancellationToken); // Prefetch 5
+            await _channel.BasicQosAsync(0, 1, false, cancellationToken); // Prefetch 1 — sequential processing
 
             await base.StartAsync(cancellationToken);
         }
@@ -63,62 +63,60 @@ namespace AiModelEvalCenter.WebApi.Consumers
 
                     bool success = false;
 
-                    if (routingKey == "telemetry.frame")
+                    if (routingKey == "telemetry.session")
                     {
-                        var frame = JsonSerializer.Deserialize<TelemetryFrame>(messageStr);
-                        if (frame != null)
+                        var session = JsonSerializer.Deserialize<TelemetrySession>(messageStr);
+                        if (session != null)
                         {
-                            db.TelemetryFrames.Add(frame);
-                            await db.SaveChangesAsync();
-                            success = true;
-                        }
-                    }
-                    else if (routingKey == "telemetry.groundtruth")
-                    {
-                        var truth = JsonSerializer.Deserialize<GroundTruth>(messageStr);
-                        if (truth != null)
-                        {
-                            db.GroundTruths.Add(truth);
-                            await db.SaveChangesAsync();
-                            success = true;
-                        }
-                    }
-                    else if (routingKey == "telemetry.inference")
-                    {
-                        var inference = JsonSerializer.Deserialize<ModelInference>(messageStr);
-                        if (inference != null)
-                        {
-                            db.ModelInferences.Add(inference);
-                            
-                            // Calculate Drift
-                            var truth = await db.GroundTruths.FirstOrDefaultAsync(g => g.FrameId == inference.FrameId);
-                            if (truth != null)
+                            var existing = await db.TelemetrySessions.FindAsync(session.Id);
+                            if (existing == null)
                             {
-                                var drift = driftCalc.CalculateDrift(inference, truth);
-                                db.DriftMetrics.Add(drift);
+                                db.TelemetrySessions.Add(session);
+                                await db.SaveChangesAsync();
                             }
-                            
-                            await db.SaveChangesAsync();
+                            success = true;
+                        }
+                    }
+                    else if (routingKey == "telemetry.batch")
+                    {
+                        var batch = JsonSerializer.Deserialize<TelemetryBatchMessage>(messageStr);
+                        if (batch != null)
+                        {
+                            // Atomik işlem: Frame → GroundTruth → Inferences → DriftMetrics
+                            db.TelemetryFrames.Add(batch.Frame);
+                            await db.SaveChangesAsync(); // Frame önce yazılmak zorunda (FK)
+
+                            db.GroundTruths.Add(batch.GroundTruth);
+                            await db.SaveChangesAsync(); // GroundTruth ikinci (Frame FK'ya bağlı)
+
+                            foreach (var inference in batch.Inferences)
+                            {
+                                db.ModelInferences.Add(inference);
+                                await db.SaveChangesAsync(); // Her inference tek tek (DriftCalc için)
+
+                                // Drift hesapla
+                                var drift = driftCalc.CalculateDrift(inference, batch.GroundTruth);
+                                db.DriftMetrics.Add(drift);
+                                await db.SaveChangesAsync();
+                            }
+
                             success = true;
                         }
                     }
 
                     if (success)
                     {
-                        // EXPLICIT ACK ONLY AFTER DB SAVE
                         await _channel.BasicAckAsync(ea.DeliveryTag, false);
-                        _logger.LogInformation("Processed and ACKed {RoutingKey}", routingKey);
+                        _logger.LogInformation("ACKed {RoutingKey}", routingKey);
                     }
                     else
                     {
-                        // Parse hatasi vb
-                        await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                        await _channel.BasicNackAsync(ea.DeliveryTag, false, false); // Dead-letter
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing message {RoutingKey}. NACKing and requeueing.", routingKey);
-                    // HATA ALIRSAK MESAJI KUYRUĞA GERİ KOY (RESILIENCE)
+                    _logger.LogError(ex, "Error processing {RoutingKey} — NACKing with requeue.", routingKey);
                     await _channel.BasicNackAsync(ea.DeliveryTag, false, requeue: true);
                 }
             };

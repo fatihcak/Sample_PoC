@@ -1,4 +1,5 @@
 using AiModelEvalCenter.Domain.Entities;
+using AiModelEvalCenter.Domain.Messages;
 using AiModelEvalCenter.Domain.ValueObjects;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -41,65 +42,78 @@ namespace AiModelEvalCenter.MockProducers.Producers
 
             await channel.ExchangeDeclareAsync("telemetry.exchange", ExchangeType.Topic, cancellationToken: stoppingToken);
 
+            // Publish session FIRST so Consumer can satisfy FK constraint before any frame arrives
+            var session = new AiModelEvalCenter.Domain.Entities.TelemetrySession
+            {
+                Id = _sessionId,
+                AircraftId = "BAYRAKTAR-TB2-SIM-001",
+                SessionLabel = $"MockSession-{DateTime.UtcNow:yyyyMMdd-HHmmss}",
+                StartedAt = DateTimeOffset.UtcNow,
+                Status = AiModelEvalCenter.Domain.Enums.SessionStatus.Running
+            };
+            await PublishMessage(channel, "telemetry.session", session, stoppingToken);
+            _logger.LogInformation("Published Session {SessionId}", _sessionId);
+
+            // Small delay to give Consumer time to commit the session before first frame
+            await Task.Delay(500, stoppingToken);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 _frameSequence++;
                 var frameId = Guid.NewGuid();
                 
-                // 1. Generate Telemetry
-                var telemetry = new TelemetryFrame
-                {
-                    Id = frameId,
-                    SessionId = _sessionId,
-                    FrameSequence = _frameSequence,
-                    CapturedAt = DateTimeOffset.UtcNow,
-                    AltitudeM = 1500m + (decimal)(new Random().NextDouble() * 100 - 50),
-                    VelocityMps = 200m + (decimal)(new Random().NextDouble() * 20 - 10),
-                    HeadingDeg = 45m
-                };
-
-                // 2. Generate Ground Truth (Kritik ekleme - MVP)
                 var truthBox = new BoundingBox { X = 100, Y = 100, W = 50, H = 50 };
-                var groundTruth = new GroundTruth
+
+                var batch = new TelemetryBatchMessage
                 {
-                    Id = Guid.NewGuid(),
-                    FrameId = frameId,
-                    VerifiedBy = "SimOracle",
-                    VerificationMethod = "simulation",
-                    TrueClass = "drone",
-                    BoundingBox = truthBox
+                    Frame = new TelemetryFrame
+                    {
+                        Id = frameId,
+                        SessionId = _sessionId,
+                        FrameSequence = _frameSequence,
+                        CapturedAt = DateTimeOffset.UtcNow,
+                        AltitudeM = 1500m + (decimal)(new Random().NextDouble() * 100 - 50),
+                        VelocityMps = 200m + (decimal)(new Random().NextDouble() * 20 - 10),
+                        HeadingDeg = 45m
+                    },
+                    GroundTruth = new GroundTruth
+                    {
+                        Id = Guid.NewGuid(),
+                        FrameId = frameId,
+                        VerifiedBy = "SimOracle",
+                        VerificationMethod = "simulation",
+                        TrueClass = "drone",
+                        BoundingBox = truthBox
+                    },
+                    Inferences = new System.Collections.Generic.List<ModelInference>()
                 };
 
-                // Publish Telemetry
-                await PublishMessage(channel, "telemetry.frame", telemetry, stoppingToken);
-                await PublishMessage(channel, "telemetry.groundtruth", groundTruth, stoppingToken);
-
-                // 3. Generate Inferences (biraz sapmalı/hatalı)
                 foreach (var modelId in _modelIds)
                 {
-                    var inference = new ModelInference
+                    batch.Inferences.Add(new ModelInference
                     {
                         Id = Guid.NewGuid(),
                         FrameId = frameId,
                         ModelId = modelId,
-                        DetectedClass = "drone", // %10 ihtimalle yanlış tahmin yapabiliriz ama basitleştirelim
+                        DetectedClass = "drone",
                         ConfidenceScore = 0.8m + (decimal)(new Random().NextDouble() * 0.15),
                         BoundingBox = new BoundingBox 
                         { 
-                            X = truthBox.X + (new Random().NextDouble() * 10 - 5), // Sapma
+                            X = truthBox.X + (new Random().NextDouble() * 10 - 5),
                             Y = truthBox.Y + (new Random().NextDouble() * 10 - 5),
                             W = truthBox.W, 
                             H = truthBox.H 
                         },
                         InferenceLatencyMs = 40m + (decimal)(new Random().NextDouble() * 20)
-                    };
-
-                    await PublishMessage(channel, "telemetry.inference", inference, stoppingToken);
+                    });
                 }
 
-                _logger.LogInformation("Published Frame {Sequence}", _frameSequence);
+                // Single atomic message — no more race conditions!
+                await PublishMessage(channel, "telemetry.batch", batch, stoppingToken);
+
+                _logger.LogInformation("Published Batch Frame {Sequence}", _frameSequence);
                 
-                await Task.Delay(1000, stoppingToken); // 1 mesaj/sn
+                await Task.Delay(1000, stoppingToken);
             }
         }
 
