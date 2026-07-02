@@ -16,8 +16,20 @@ builder.Services.AddScoped<AiModelEvalCenter.Domain.Interfaces.IDriftCalculation
 
 // Register Consumer
 builder.Services.AddHostedService<AiModelEvalCenter.WebApi.Consumers.TelemetryConsumer>();
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowDashboard", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 var app = builder.Build();
+
+app.UseCors("AllowDashboard");
 
 if (app.Environment.IsDevelopment())
 {
