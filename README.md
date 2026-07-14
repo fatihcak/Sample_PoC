@@ -1,6 +1,6 @@
 # AI Model Evaluation Data Center — PoC
 
-Baykar Yüksek İrtifa Yeni Mezun Programı için geliştirilmiş, yapay zeka modellerinin gerçek zamanlı performansını izleyen bir değerlendirme merkezi.
+Yapay zeka modellerinin gerçek zamanlı performansını izleyen bir değerlendirme merkezi denemesi.
 
 ## Mimari
 
