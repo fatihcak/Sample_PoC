@@ -139,3 +139,78 @@ tr:hover {
 .drift-high { color: #ef4444; }
 .drift-med { color: #f59e0b; }
 .drift-low { color: #10b981; }
+
+/* === DRIFT ALERTS === */
+.alerts-panel { margin-top: 1.5rem; }
+
+.alert-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 0.5rem;
+  animation: pulse-badge 1.5s infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+.no-alerts {
+  color: #10b981;
+  padding: 1rem 0;
+  font-size: 0.95rem;
+}
+
+.alerts-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.alert-item {
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  border-left: 4px solid;
+}
+
+.alert-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: #f59e0b;
+}
+
+.alert-critical {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+.alert-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.severity-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.severity-warning { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.severity-critical { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+.alert-model { font-weight: 600; font-size: 0.9rem; }
+.alert-time { margin-left: auto; color: #666; font-size: 0.8rem; }
+
+.alert-detail {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.55);
+}
+
+.alert-detail strong { color: rgba(255,255,255,0.85); }

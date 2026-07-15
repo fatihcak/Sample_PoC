@@ -45,9 +45,21 @@ interface DriftMetric {
   latency: number;
 }
 
+interface DriftAlert {
+  id: string;
+  modelName: string;
+  severity: 'WARNING' | 'CRITICAL';
+  triggeredAtIou: number;
+  threshold: number;
+  windowSize: number;
+  detectedAt: string;
+  isResolved: boolean;
+}
+
 function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [metrics, setMetrics] = useState<DriftMetric[]>([]);
+  const [alerts, setAlerts] = useState<DriftAlert[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,6 +69,9 @@ function App() {
 
         const metRes = await axios.get<DriftMetric[]>(`${API_BASE}/drift-metrics?limit=50`);
         setMetrics(metRes.data);
+
+        const alertRes = await axios.get<DriftAlert[]>(`${API_BASE}/drift-alerts?limit=10`);
+        setAlerts(alertRes.data);
       } catch (err) {
         console.error('API Error:', err);
       }
@@ -217,6 +232,41 @@ function App() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* DRIFT ALERTS PANEL */}
+      <div className="glass-card alerts-panel">
+        <div className="card-title" style={{marginBottom: '1rem'}}>
+          <ShieldAlert size={18} />
+          Live Drift Alerts
+          {alerts.filter(a => !a.isResolved).length > 0 && (
+            <span className="alert-count-badge">
+              {alerts.filter(a => !a.isResolved).length}
+            </span>
+          )}
+        </div>
+        {alerts.length === 0 ? (
+          <div className="no-alerts">✅ All models performing within thresholds</div>
+        ) : (
+          <div className="alerts-list">
+            {alerts.map(a => (
+              <div key={a.id} className={`alert-item alert-${a.severity.toLowerCase()}`}>
+                <div className="alert-header">
+                  <span className={`severity-badge severity-${a.severity.toLowerCase()}`}>
+                    {a.severity === 'CRITICAL' ? '🚨' : '⚠️'} {a.severity}
+                  </span>
+                  <span className="alert-model">{a.modelName}</span>
+                  <span className="alert-time">{new Date(a.detectedAt).toLocaleTimeString()}</span>
+                </div>
+                <div className="alert-detail">
+                  Avg IoU: <strong>{a.triggeredAtIou.toFixed(3)}</strong>
+                  &nbsp;/&nbsp;Threshold: <strong>{a.threshold.toFixed(2)}</strong>
+                  &nbsp;/&nbsp;Window: <strong>{a.windowSize} inferences</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
