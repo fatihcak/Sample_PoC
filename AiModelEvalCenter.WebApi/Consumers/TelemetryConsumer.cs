@@ -60,6 +60,7 @@ namespace AiModelEvalCenter.WebApi.Consumers
                     using var scope = _scopeFactory.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                     var driftCalc = scope.ServiceProvider.GetRequiredService<IDriftCalculationService>();
+                    var driftAlert = scope.ServiceProvider.GetRequiredService<IDriftAlertService>();
 
                     bool success = false;
 
@@ -92,12 +93,30 @@ namespace AiModelEvalCenter.WebApi.Consumers
                             foreach (var inference in batch.Inferences)
                             {
                                 db.ModelInferences.Add(inference);
-                                await db.SaveChangesAsync(); // Her inference tek tek (DriftCalc için)
+                                await db.SaveChangesAsync();
 
-                                // Drift hesapla
+                                // Drift hesapla ve kaydet
                                 var drift = driftCalc.CalculateDrift(inference, batch.GroundTruth);
                                 db.DriftMetrics.Add(drift);
                                 await db.SaveChangesAsync();
+
+                                // Drift alarm kontrolü (son 10 inference'ın ortalaması)
+                                var alert = await driftAlert.CheckForDriftAsync(inference.ModelId, windowSize: 10);
+                                if (alert != null)
+                                {
+                                    // Aynı model için son 5 dakikada aynı severity'de alert yoksa kaydet
+                                    var recentAlert = await db.DriftAlerts
+                                        .AnyAsync(a => a.ModelId == alert.ModelId
+                                                    && a.Severity == alert.Severity
+                                                    && a.DetectedAt > DateTimeOffset.UtcNow.AddMinutes(-5));
+                                    if (!recentAlert)
+                                    {
+                                        db.DriftAlerts.Add(alert);
+                                        await db.SaveChangesAsync();
+                                        _logger.LogWarning("[DRIFT ALERT] {Severity} — Model {ModelId} IoU: {Iou:F3}",
+                                            alert.Severity, alert.ModelId, alert.TriggeredAtIou);
+                                    }
+                                }
                             }
 
                             success = true;
