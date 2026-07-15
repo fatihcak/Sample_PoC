@@ -58,5 +58,27 @@ namespace AiModelEvalCenter.WebApi.Controllers
 
             return Ok(metrics.OrderBy(m => m.computedAt)); // Time series
         }
+        [HttpGet("drift-alerts")]
+        public async Task<IActionResult> GetDriftAlerts([FromQuery] int limit = 20)
+        {
+            var alerts = await _db.DriftAlerts
+                .Include(a => a.Model)
+                .OrderByDescending(a => a.DetectedAt)
+                .Take(limit)
+                .Select(a => new
+                {
+                    id = a.Id,
+                    modelName = a.Model!.Name,
+                    severity = a.Severity,
+                    triggeredAtIou = Math.Round(a.TriggeredAtIou, 3),
+                    threshold = a.Threshold,
+                    windowSize = a.WindowSize,
+                    detectedAt = a.DetectedAt,
+                    isResolved = a.IsResolved
+                })
+                .ToListAsync();
+
+            return Ok(alerts);
+        }
     }
 }
