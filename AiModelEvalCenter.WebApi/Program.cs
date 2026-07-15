@@ -13,6 +13,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Register Services
 builder.Services.AddScoped<AiModelEvalCenter.Domain.Interfaces.IDriftCalculationService, AiModelEvalCenter.Infrastructure.Services.DriftCalculationService>();
+builder.Services.AddScoped<AiModelEvalCenter.Domain.Interfaces.IDriftAlertService, AiModelEvalCenter.Infrastructure.Services.DriftAlertService>();
 
 // Register Consumer
 builder.Services.AddHostedService<AiModelEvalCenter.WebApi.Consumers.TelemetryConsumer>();

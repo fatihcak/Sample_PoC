@@ -13,6 +13,7 @@ namespace AiModelEvalCenter.Infrastructure.Persistence
         public DbSet<ModelInference> ModelInferences => Set<ModelInference>();
         public DbSet<GroundTruth> GroundTruths => Set<GroundTruth>();
         public DbSet<DriftMetric> DriftMetrics => Set<DriftMetric>();
+        public DbSet<DriftAlert> DriftAlerts => Set<DriftAlert>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
